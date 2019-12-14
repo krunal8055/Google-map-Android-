@@ -1,33 +1,25 @@
 package com.example.gmapdemo;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-import androidx.fragment.app.Fragment;
 
-import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
-import android.os.Build;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
-import android.widget.ListAdapter;
 import android.widget.Toast;
 
-import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.maps.CameraUpdate;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
-import com.google.android.gms.maps.MapFragment;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
@@ -36,10 +28,17 @@ import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 
-import java.io.IOException;
-import java.util.List;
+import org.json.JSONObject;
 
-import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 
 public class Map extends AppCompatActivity implements View.OnClickListener, OnMapReadyCallback {
 
@@ -50,6 +49,7 @@ public class Map extends AppCompatActivity implements View.OnClickListener, OnMa
     //GoogleMap map;
     String location2;
     LatLng latLng;
+    GoogleMap googleMap;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -114,13 +114,13 @@ public class Map extends AppCompatActivity implements View.OnClickListener, OnMa
 
     @Override
     public void onMapReady(final GoogleMap googleMap) {
+        this.googleMap = googleMap;
+        List<Address> addresseslist = null;
         LatLng C_latLng = new LatLng(currentLocation.getLatitude(),currentLocation.getLongitude());
         MarkerOptions markerOptions = new MarkerOptions().position(C_latLng);
         googleMap.addMarker(markerOptions);
         googleMap.setMyLocationEnabled(true);
         Intent i = getIntent();
-
-        List<Address> addresseslist = null;
 
         if(!i.getStringExtra("L2").isEmpty())
         {
@@ -135,14 +135,22 @@ public class Map extends AppCompatActivity implements View.OnClickListener, OnMa
             latLng = new LatLng(address.getLatitude(),address.getLongitude());
             googleMap.addMarker( new MarkerOptions().position(latLng).title("Destination"));
             googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng,18));
-            Toast.makeText(Map.this, location2, Toast.LENGTH_LONG).show();
-        }
-        googleMap.addPolyline(new PolylineOptions().add(
-                C_latLng,
-                latLng
-        ).width(5).color(Color.BLUE));
-        addresseslist.clear();
+            String url = getRequesturl(C_latLng,latLng);
 
+            TaskRequestDirection taskRequestDirection = new TaskRequestDirection();
+            taskRequestDirection.execute(url);
+            //Toast.makeText(Map.this, location2, Toast.LENGTH_LONG).show();
+        }
+
+        //Polylione Direct from Current location to Destination
+
+       /* googleMap.addPolyline(new PolylineOptions()
+                .add(C_latLng,
+                latLng)
+                .width(5)
+                .color(Color.BLUE));*/
+
+        addresseslist.clear();
 
         Zoomin.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -157,6 +165,137 @@ public class Map extends AppCompatActivity implements View.OnClickListener, OnMa
             }
         });
 
+
+
+    }
+
+    private String getRequesturl(LatLng c_latLng, LatLng latLng) {
+        String str_org = "origin="+c_latLng.latitude+","+c_latLng.longitude;
+        Log.i("Origin:",str_org);
+
+        String str_dest = "destination="+latLng.latitude+","+latLng.longitude;
+        Log.i("Destination:",str_dest);
+
+        String sensor = "sensor=false";
+
+        String mode = "mode=driving";
+
+        String param = str_org+"&"+str_dest+"&"+sensor+"&"+mode;
+        Log.i("Param:",param);
+
+        String output = "json";
+
+        String url = "https://maps.googleapis.com/maps/api/directions/"+output+"?"+param+"&key="+"AIzaSyAzsaYsOeEnry_dTlo3p8EIWgRIG4Lgeg0";
+        Log.i("FINAL URL:",url);
+        return url;
+    }
+
+    public String requestDirection(String requrl) throws IOException {
+        String responseString = "";
+        InputStream inputStream = null;
+        HttpURLConnection httpURLConnection = null;
+        try{
+            URL url = new URL(requrl);
+            httpURLConnection = (HttpURLConnection) url.openConnection();
+            httpURLConnection.connect();
+
+            inputStream = httpURLConnection.getInputStream();
+            InputStreamReader inputStreamReader = new InputStreamReader(inputStream);
+            BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
+
+            StringBuffer stringBuffer = new StringBuffer();
+            String line = "";
+
+            while ((line = bufferedReader.readLine()) != null)
+            {
+                stringBuffer.append(line);
+            }
+
+            responseString = stringBuffer.toString();
+            bufferedReader.close();
+            inputStreamReader.close();
+
+
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        finally {
+            if(inputStream!= null)
+            {
+                inputStream.close();
+            }
+            httpURLConnection.disconnect();
+        }
+        return responseString;
+    }
+
+    public class TaskRequestDirection extends AsyncTask<String, Void, String>
+    {
+
+        @Override
+        protected String doInBackground(String... strings) {
+            String responseString = "";
+            try {
+                responseString = requestDirection(strings[0]);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            return responseString;
+        }
+
+        @Override
+        protected void onPostExecute(String s) {
+            super.onPostExecute(s);
+            TaskParse taskParse = new TaskParse();
+            taskParse.execute(s);
+        }
+    }
+
+    public class TaskParse extends AsyncTask< String,Void,List<List<HashMap<String,String>>> >
+    {
+
+        @Override
+        protected List<List<HashMap<String, String>>> doInBackground(String... strings) {
+            JSONObject jsonObject = null;
+            List<List<HashMap<String,String>>> routes = null;
+            try{
+                jsonObject = new JSONObject(strings[0]);
+                DirectionParse directionParse = new DirectionParse();
+                routes = directionParse.parse(jsonObject);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return routes;
+        }
+
+        @Override
+        protected void onPostExecute(List<List<HashMap<String, String>>> lists) {
+            super.onPostExecute(lists);
+            ArrayList points = null;
+            PolylineOptions polylineOptions = null;
+            for (List<HashMap<String,String>> paths:lists)
+            {
+                points = new ArrayList();
+                polylineOptions = new PolylineOptions();
+
+                for(HashMap<String,String> point : paths)
+                {
+                    double lat = Double.parseDouble(point.get("lat"));
+                    double lon = Double.parseDouble(point.get("lon"));
+
+                    points.add(new LatLng(lat,lon));
+                }
+
+                polylineOptions.addAll(points);
+                polylineOptions.width(15);
+                polylineOptions.color(Color.BLUE);
+                polylineOptions.geodesic(true);
+            }
+                googleMap.addPolyline(polylineOptions);
+        }
     }
 
 }
