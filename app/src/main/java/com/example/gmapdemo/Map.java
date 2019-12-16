@@ -9,6 +9,7 @@ import android.graphics.Color;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
@@ -39,17 +40,19 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 
 public class Map extends AppCompatActivity implements View.OnClickListener, OnMapReadyCallback {
 
     FusedLocationProviderClient fusedLocationProviderClient;
     Location currentLocation;
     private static final int LOCATION_REQUEST_CODE =101 ;
-    Button Back_Home,Zoomin,Zoomout;
+    Button Back_Home,Navigate,Zoomin,Zoomout;
     //GoogleMap map;
     String location2;
     LatLng latLng;
     GoogleMap googleMap;
+    String sourceLatitude,sourceLongitude,destinationLatitude,destinationLongitude;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -64,9 +67,11 @@ public class Map extends AppCompatActivity implements View.OnClickListener, OnMa
         fetchCurrentLocation();
 
         Back_Home = findViewById(R.id.back_home_btn);
+        Navigate = findViewById(R.id.back_Nav_btn);
         Zoomin = findViewById(R.id.zoomin);
         Zoomout = findViewById(R.id.zoomout);
         Back_Home.setOnClickListener( this);
+        Navigate.setOnClickListener(this);
         Zoomin.setOnClickListener(this);
         Zoomout.setOnClickListener(this);
     }
@@ -110,12 +115,25 @@ public class Map extends AppCompatActivity implements View.OnClickListener, OnMa
             startActivity(i);
             finish();
         }
+        else if(v == Navigate)
+        {
+
+            String uri = "http://maps.google.com/maps?saddr=" + sourceLatitude + "," + sourceLongitude + "&daddr=" + destinationLatitude + "," + destinationLongitude;
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
+            intent.setPackage("com.google.android.apps.maps");
+            startActivity(intent);
+        }
     }
 
     @Override
     public void onMapReady(final GoogleMap googleMap) {
         this.googleMap = googleMap;
         List<Address> addresseslist = null;
+
+        //Source CO ORDINATION
+        sourceLatitude = String.valueOf(currentLocation.getLatitude());
+        sourceLongitude = String.valueOf(currentLocation.getLongitude());
+
         LatLng C_latLng = new LatLng(currentLocation.getLatitude(),currentLocation.getLongitude());
         MarkerOptions markerOptions = new MarkerOptions().position(C_latLng);
         googleMap.addMarker(markerOptions);
@@ -139,6 +157,10 @@ public class Map extends AppCompatActivity implements View.OnClickListener, OnMa
 
             TaskRequestDirection taskRequestDirection = new TaskRequestDirection();
             taskRequestDirection.execute(url);
+            //destination CO ORDINATION
+            destinationLatitude = String.valueOf(address.getLatitude());
+            destinationLongitude = String.valueOf(address.getLongitude());
+
             //Toast.makeText(Map.this, location2, Toast.LENGTH_LONG).show();
         }
 
